@@ -99,9 +99,11 @@ projects could work together?"*
 
 One secret, `CONTROL_CENTER_TOKEN`, guards everything private:
 
-- **Dashboard pages** — HTTP Basic auth via `src/proxy.ts` (any username,
-  password = the token). The registry contains private-repo names and manifests,
-  so the whole UI is behind it.
+- **Dashboard pages** — HTTP Basic auth via `src/proxy.ts`. With
+  `DASHBOARD_PASSWORD` set, log in as `DASHBOARD_USER` (default `admin`) +
+  that password; otherwise any username with the token as password. The
+  registry contains private-repo names and manifests, so the whole UI is
+  behind it.
 - **`/api/mcp` and `/api/sync`** — `Authorization: Bearer <token>`.
 - **`/api/collect` and `/px.js`** — intentionally public; sites post pageviews there.
 

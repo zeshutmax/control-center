@@ -2,14 +2,19 @@ import { NextResponse, type NextRequest } from "next/server";
 
 /**
  * Dashboard auth. The registry contains private-repo names, manifests, and
- * analytics, so every page is protected by HTTP Basic auth (any username,
- * password = CONTROL_CENTER_TOKEN). Excluded from the matcher below:
+ * analytics, so every page is protected by HTTP Basic auth:
  *
+ * - DASHBOARD_PASSWORD set: log in as DASHBOARD_USER (default "admin") with
+ *   that password.
+ * - Otherwise: any username, password = CONTROL_CENTER_TOKEN.
+ * - `Authorization: Bearer CONTROL_CENTER_TOKEN` is always accepted too.
+ *
+ * Excluded from the matcher below:
  * - /api/collect and /px.js — public by design (sites post pageviews here)
  * - /api/mcp and /api/sync — bearer-guarded in src/lib/auth.ts
  *
- * Same fail-closed policy as the API guard: token unset → open in dev,
- * refused in production.
+ * Fail-closed policy: no credentials configured → open in dev, refused in
+ * production.
  */
 
 function constantTimeEqual(a: string, b: string): boolean {
@@ -20,13 +25,16 @@ function constantTimeEqual(a: string, b: string): boolean {
 }
 
 export default function proxy(req: NextRequest) {
-  const expected = process.env.CONTROL_CENTER_TOKEN;
+  const token = process.env.CONTROL_CENTER_TOKEN;
+  const dashUser = process.env.DASHBOARD_USER || "admin";
+  const dashPass = process.env.DASHBOARD_PASSWORD;
 
-  if (!expected) {
+  if (!token && !dashPass) {
     if (process.env.NODE_ENV === "production") {
-      return new NextResponse("CONTROL_CENTER_TOKEN is not configured; refusing to serve.", {
-        status: 503,
-      });
+      return new NextResponse(
+        "Neither DASHBOARD_PASSWORD nor CONTROL_CENTER_TOKEN is configured; refusing to serve.",
+        { status: 503 },
+      );
     }
     return NextResponse.next();
   }
@@ -35,13 +43,18 @@ export default function proxy(req: NextRequest) {
   if (header.startsWith("Basic ")) {
     try {
       const decoded = atob(header.slice(6));
-      const password = decoded.slice(decoded.indexOf(":") + 1);
-      if (constantTimeEqual(password, expected)) return NextResponse.next();
+      const sep = decoded.indexOf(":");
+      const user = decoded.slice(0, sep);
+      const password = decoded.slice(sep + 1);
+      const ok = dashPass
+        ? constantTimeEqual(user, dashUser) && constantTimeEqual(password, dashPass)
+        : constantTimeEqual(password, token!);
+      if (ok) return NextResponse.next();
     } catch {
       // fall through to the challenge
     }
   }
-  if (header.startsWith("Bearer ") && constantTimeEqual(header.slice(7), expected)) {
+  if (token && header.startsWith("Bearer ") && constantTimeEqual(header.slice(7), token)) {
     return NextResponse.next();
   }
 
