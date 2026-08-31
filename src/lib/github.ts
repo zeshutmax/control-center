@@ -76,6 +76,30 @@ export async function listRepos(): Promise<GithubRepo[]> {
   return repos;
 }
 
+/**
+ * Fetch one repo by "owner/name" — works for any repo the token can see,
+ * including ones the user doesn't own (used for manually added projects).
+ * Returns null when the repo doesn't exist or isn't accessible.
+ */
+export async function fetchRepo(fullName: string): Promise<GithubRepo | null> {
+  const res = await githubFetch(`/repos/${fullName}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`GitHub /repos/${fullName} failed: ${res.status}`);
+  const r = (await res.json()) as RepoResponse;
+  return {
+    fullName: r.full_name,
+    name: r.name,
+    description: r.description,
+    homepage: r.homepage || null,
+    topics: r.topics ?? [],
+    archived: r.archived,
+    fork: r.fork,
+    defaultBranch: r.default_branch,
+    pushedAt: r.pushed_at,
+    htmlUrl: r.html_url,
+  };
+}
+
 /** Fetch and return the raw project.yaml from a repo root, or null if absent. */
 export async function fetchManifestFile(fullName: string): Promise<string | null> {
   for (const filename of ["project.yaml", "project.yml"]) {

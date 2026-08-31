@@ -27,6 +27,7 @@ function projectSummary(p: typeof projects.$inferSelect) {
     lastDeployAt: p.lastDeployAt,
     topics: p.topics,
     hasManifest: p.manifest !== null,
+    isManual: p.isManual,
     isArchived: p.isArchived,
     isFork: p.isFork,
   };
@@ -50,17 +51,18 @@ const handler = createMcpHandler(
       {
         title: "List projects",
         description:
-          "List every project in the registry (merged from GitHub repos and DigitalOcean apps). " +
-          "source=github means repo only (not deployed), source=do means a deployed app with no repo (orphan), source=both means repo + deployment.",
+          "List every project in the registry (merged from GitHub repos and DigitalOcean apps, plus manually added ones). " +
+          "source=github means repo only (not deployed), source=do means a deployed app with no repo (orphan), source=both means repo + deployment, source=manual means added by hand with no synced counterpart. " +
+          "isManual marks hand-added projects regardless of source.",
         inputSchema: z.object({
-          source: z.enum(["github", "do", "both"]).optional().describe("Filter by source"),
+          source: z.enum(["github", "do", "both", "manual"]).optional().describe("Filter by source"),
           includeArchived: z.boolean().default(false).describe("Include archived repos and forks"),
         }),
       },
       async ({ source, includeArchived }) => {
         let rows = await db.select().from(projects).orderBy(desc(projects.lastCommitAt));
         if (source) rows = rows.filter((p) => p.source === source);
-        if (!includeArchived) rows = rows.filter((p) => !p.isArchived && !p.isFork);
+        if (!includeArchived) rows = rows.filter((p) => p.isManual || (!p.isArchived && !p.isFork));
         return json({ count: rows.length, projects: rows.map(projectSummary) });
       },
     );
@@ -179,7 +181,7 @@ const handler = createMcpHandler(
       },
       async () => {
         const rows = await db.select().from(projects);
-        const active = rows.filter((p) => !p.isArchived && !p.isFork);
+        const active = rows.filter((p) => p.isManual || (!p.isArchived && !p.isFork));
         return json({
           note: "exposes/needs come from each repo's project.yaml. Projects without a manifest only have repo metadata — suggest adding project.yaml where reasoning is limited.",
           projects: active.map((p) => ({
@@ -187,7 +189,9 @@ const handler = createMcpHandler(
             name: p.name,
             description: p.description,
             liveUrl: p.liveUrl ?? p.homepage,
-            deployed: p.doAppId !== null,
+            // Same definition as the dashboard: a DO app, or a manual project
+            // that points at a live site.
+            deployed: p.doAppId !== null || (p.isManual && p.liveUrl !== null),
             stack: p.manifest?.stack ?? [],
             tags: p.topics,
             exposes: p.manifest?.exposes ?? [],

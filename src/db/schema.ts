@@ -31,8 +31,10 @@ export const projects = pgTable(
     doAppId: text("do_app_id"),
     // "app" | "static_site" | "unknown"
     kind: text("kind").notNull().default("unknown"),
-    // "github" | "do" | "both"
+    // "github" | "do" | "both" | "manual" (manual = added by hand, no synced counterpart yet)
     source: text("source").notNull().default("github"),
+    // Added by hand via the dashboard: sync may enrich it but never deletes it.
+    isManual: boolean("is_manual").notNull().default(false),
     topics: jsonb("topics").$type<string[]>().notNull().default([]),
     // Parsed project.yaml from the repo root, if present
     manifest: jsonb("manifest").$type<ProjectManifest | null>(),

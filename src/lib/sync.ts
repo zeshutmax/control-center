@@ -2,7 +2,7 @@ import { eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import { db, deployments, pageEvents, projects, syncRuns } from "@/db";
 import type { Project, ProjectManifest, SyncDetail } from "@/db/schema";
 import { listApps, listDeployments, type DoApp } from "./digitalocean";
-import { fetchManifestFile, listRepos, type GithubRepo } from "./github";
+import { fetchManifestFile, fetchRepo, listRepos, type GithubRepo } from "./github";
 import { parseManifest } from "./manifest";
 
 type ProjectRecord = {
@@ -56,7 +56,8 @@ function buildRecords(
 ): { records: ProjectRecord[]; orphanApps: string[] } {
   const byRepo = new Map<string, ProjectRecord>();
   const extra: ProjectRecord[] = [];
-  const usedSlugs = new Set<string>();
+  // "new" is reserved: /projects/new is the add-project form route.
+  const usedSlugs = new Set<string>(["new"]);
 
   const claimSlug = (base: string): string => {
     let slug = base;
@@ -203,7 +204,8 @@ async function upsertRecords(
           ? {
               doAppId: r.doAppId,
               kind: r.kind,
-              liveUrl: r.liveUrl,
+              // A manual row's hand-entered URL beats the app's default domain.
+              liveUrl: match.isManual ? (match.liveUrl ?? r.liveUrl) : r.liveUrl,
               lastDeployAt: r.lastDeployAt,
               deployPhase: r.deployPhase,
               // Repo listed in the app spec but absent from GitHub → repo was
@@ -225,8 +227,11 @@ async function upsertRecords(
                 isFork: r.isFork,
                 lastCommitAt: r.lastCommitAt,
                 source: match.doAppId ? "both" : "github",
+                // A manual row for a repo the autoscan owns graduates to a
+                // synced project — the scan manages it (and re-adds it) anyway.
+                isManual: false,
               }
-            : { ...r, slug: match.slug };
+            : { ...r, slug: match.slug, isManual: false };
       await db
         .update(projects)
         .set({ ...set, updatedAt: new Date() })
@@ -234,7 +239,7 @@ async function upsertRecords(
       if (r.doAppId) byAppId.set(r.doAppId, match);
     } else {
       let slug = r.slug;
-      for (let i = 2; bySlug.has(slug); i++) slug = `${r.slug}-${i}`;
+      for (let i = 2; bySlug.has(slug) || slug === "new"; i++) slug = `${r.slug}-${i}`;
       const [inserted] = await db
         .insert(projects)
         .values({ ...r, slug })
@@ -250,7 +255,10 @@ async function upsertRecords(
   // Rows matched by nothing this run have neither a live repo nor a live app —
   // the upstream project is gone, so the registry lets it go too. Page events
   // survive (keyed by siteId) and re-attach if the slug ever comes back.
-  const dead = existing.filter((row) => !matchedIds.has(row.id)).map((row) => row.id);
+  // Manually added projects are exempt: only their owner removes them.
+  const dead = existing
+    .filter((row) => !matchedIds.has(row.id) && !row.isManual)
+    .map((row) => row.id);
   if (dead.length > 0) {
     await db.delete(projects).where(inArray(projects.id, dead));
   }
@@ -286,6 +294,43 @@ async function syncDeployments(liveAppIds: Set<string>): Promise<string[]> {
     }
   });
   return errors;
+}
+
+/**
+ * Manual projects pointing at repos the owned-repo listing can't see (someone
+ * else's repo, an org repo) get refreshed one by one so their commit dates,
+ * descriptions, and manifests stay current.
+ */
+async function refreshManualRepos(liveRepoNames: Set<string>): Promise<void> {
+  const manual = await db.select().from(projects).where(eq(projects.isManual, true));
+  const targets = manual.filter(
+    (p) => p.githubRepo && !liveRepoNames.has(p.githubRepo.toLowerCase()),
+  );
+  await mapLimit(targets, 5, async (project) => {
+    try {
+      const repo = await fetchRepo(project.githubRepo!);
+      if (!repo) return; // gone or inaccessible — keep what we have
+      const raw = await fetchManifestFile(repo.fullName);
+      const parsed = raw !== null ? parseManifest(raw) : null;
+      await db
+        .update(projects)
+        .set({
+          // Hand-entered description wins over GitHub's — refresh only fills gaps.
+          description: project.description ?? parsed?.manifest?.description ?? repo.description,
+          defaultBranch: repo.defaultBranch,
+          homepage: repo.homepage ?? project.homepage,
+          topics: [...new Set([...repo.topics, ...(parsed?.manifest?.tags ?? [])])],
+          manifest: parsed?.manifest ?? null,
+          manifestError: parsed?.error ?? null,
+          isArchived: repo.archived,
+          lastCommitAt: repo.pushedAt ? new Date(repo.pushedAt) : null,
+          updatedAt: new Date(),
+        })
+        .where(eq(projects.id, project.id));
+    } catch {
+      // A refresh failure never breaks the sync.
+    }
+  });
 }
 
 /** Attach events that arrived before their project existed in the registry. */
@@ -330,6 +375,7 @@ export async function runSync(): Promise<SyncDetail> {
     const { records, orphanApps } = buildRecords(repos, apps, manifests);
     const { upserted, removed } = await upsertRecords(records, liveRepoNames, liveAppIds);
     const deploymentFetchErrors = await syncDeployments(liveAppIds);
+    await refreshManualRepos(liveRepoNames);
     await adoptOrphanEvents();
     await pruneUnmatchedEvents();
 

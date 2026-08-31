@@ -19,6 +19,8 @@ function StatTile({ label, value, accent }: { label: string; value: string; acce
 }
 
 function SourceBadge({ project }: { project: Project }) {
+  if (project.isManual)
+    return <span className="border border-accent/40 px-1.5 py-px text-[10px] uppercase text-accent">manual</span>;
   if (project.source === "do")
     return <span className="border border-amber/40 px-1.5 py-px text-[10px] uppercase text-amber">no repo</span>;
   if (project.source === "github")
@@ -70,10 +72,13 @@ export default async function Dashboard() {
     lastSyncRun(),
   ]);
 
-  const visible = allProjects.filter((p) => !p.isArchived && !p.isFork);
+  // Manual projects are always shown — the owner added them on purpose,
+  // even when the linked repo is a fork or archived.
+  const visible = allProjects.filter((p) => p.isManual || (!p.isArchived && !p.isFork));
   const hidden = allProjects.length - visible.length;
-  const deployed = visible.filter((p) => p.doAppId !== null);
-  const repoOnly = visible.filter((p) => p.doAppId === null);
+  // "Deployed" = live somewhere: a DO app, or a manual project with a URL.
+  const deployed = visible.filter((p) => p.doAppId !== null || (p.isManual && p.liveUrl));
+  const repoOnly = visible.filter((p) => !deployed.includes(p));
   // Totals over visible projects only, so the tiles match the cards below.
   const visibleSummaries = visible.map((p) => summary.get(p.id)).filter((s) => s !== undefined);
   const totalViews = visibleSummaries.reduce((s, v) => s + v.totals.views, 0);
@@ -91,7 +96,15 @@ export default async function Dashboard() {
               : "never synced — configure GITHUB_TOKEN and DO_API_TOKEN, then sync"}
           </p>
         </div>
-        <SyncButton />
+        <div className="flex items-center gap-3">
+          <Link
+            href="/projects/new"
+            className="bracket border border-line2 bg-panel2 px-4 py-1.5 text-[11px] uppercase tracking-wider text-ink hover:border-accent hover:text-accent"
+          >
+            + add project
+          </Link>
+          <SyncButton />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

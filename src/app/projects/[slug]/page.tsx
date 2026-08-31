@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CopyBlock } from "@/components/CopyBlock";
 import { RankedBars } from "@/components/RankedBars";
+import { RemoveProjectButton } from "@/components/RemoveProjectButton";
 import { TrafficChart } from "@/components/TrafficChart";
 import { db, deployments, projects } from "@/db";
 import { fmtNum, phaseLed, relTime } from "@/lib/format";
@@ -71,6 +72,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
                 github ↗
               </a>
             )}
+            {project.isManual && <RemoveProjectButton slug={project.slug} />}
           </span>
         </div>
         {project.description && <p className="mt-2 max-w-2xl text-dim">{project.description}</p>}
