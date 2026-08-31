@@ -43,6 +43,11 @@ upstream are removed from the registry on the next sync (their pixel events are
 kept and re-attach by slug if the project comes back); a second app deployed
 from the same repo (e.g. staging) gets its own row.
 
+Projects can also be added by hand (**+ add project**: a GitHub repo, a URL, or
+both — never deleted by the sync) and removed from any project page: manual
+projects delete outright, synced ones hide (restorable from the dashboard,
+since the scan would re-discover a true delete).
+
 ### project.yaml — the manifest
 
 Any repo can declare a manifest at its root. All fields optional:
