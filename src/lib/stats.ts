@@ -50,35 +50,34 @@ function fillDays(days: number, rows: Row[]): DailyPoint[] {
 export async function statsForProject(projectId: number, days = 30): Promise<ProjectStats> {
   const start = windowStart(days);
 
-  const dailyRows = await db.execute(sql`
-    select to_char(created_at at time zone 'UTC', 'YYYY-MM-DD') as day,
-           count(*) as views,
-           count(distinct visitor_hash) as visitors
-    from page_events
-    where project_id = ${projectId} and created_at >= ${start}
-    group by 1 order by 1
-  `);
-
-  const totalRows = await db.execute(sql`
-    select count(*) as views, count(distinct visitor_hash) as visitors
-    from page_events
-    where project_id = ${projectId} and created_at >= ${start}
-  `);
-
-  const pathRows = await db.execute(sql`
-    select path as label, count(*) as views
-    from page_events
-    where project_id = ${projectId} and created_at >= ${start}
-    group by 1 order by 2 desc limit 10
-  `);
-
-  const referrerRows = await db.execute(sql`
-    select referrer as label, count(*) as views
-    from page_events
-    where project_id = ${projectId} and created_at >= ${start}
-      and referrer is not null
-    group by 1 order by 2 desc limit 10
-  `);
+  const [dailyRows, totalRows, pathRows, referrerRows] = await Promise.all([
+    db.execute(sql`
+      select to_char(created_at at time zone 'UTC', 'YYYY-MM-DD') as day,
+             count(*) as views,
+             count(distinct visitor_hash) as visitors
+      from page_events
+      where project_id = ${projectId} and created_at >= ${start}
+      group by 1 order by 1
+    `),
+    db.execute(sql`
+      select count(*) as views, count(distinct visitor_hash) as visitors
+      from page_events
+      where project_id = ${projectId} and created_at >= ${start}
+    `),
+    db.execute(sql`
+      select path as label, count(*) as views
+      from page_events
+      where project_id = ${projectId} and created_at >= ${start}
+      group by 1 order by 2 desc limit 10
+    `),
+    db.execute(sql`
+      select referrer as label, count(*) as views
+      from page_events
+      where project_id = ${projectId} and created_at >= ${start}
+        and referrer is not null
+      group by 1 order by 2 desc limit 10
+    `),
+  ]);
 
   const total = totalRows.rows[0] as Row | undefined;
   return {

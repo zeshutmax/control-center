@@ -2,21 +2,14 @@ import { desc } from "drizzle-orm";
 import Link from "next/link";
 import { db, projects, type Project } from "@/db";
 import { Sparkline } from "@/components/Sparkline";
+import { StatTile } from "@/components/StatTile";
 import { SyncButton } from "@/components/SyncButton";
+import { buttonCls, sectionHeadCls } from "@/components/ui";
 import { fmtNum, phaseLed, relTime } from "@/lib/format";
 import { statsSummary, type ProjectSummary } from "@/lib/stats";
 import { lastSyncRun } from "@/lib/sync";
 
 export const dynamic = "force-dynamic";
-
-function StatTile({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <div className="bracket border border-line bg-panel px-4 py-3">
-      <div className={`font-display text-3xl font-semibold ${accent ? "text-accent" : "text-ink"}`}>{value}</div>
-      <div className="mt-0.5 text-[11px] uppercase tracking-wider text-mute">{label}</div>
-    </div>
-  );
-}
 
 function SourceBadge({ project }: { project: Project }) {
   if (project.isManual)
@@ -97,10 +90,7 @@ export default async function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Link
-            href="/projects/new"
-            className="bracket border border-line2 bg-panel2 px-4 py-1.5 text-[11px] uppercase tracking-wider text-ink hover:border-accent hover:text-accent"
-          >
+          <Link href="/projects/new" className={buttonCls}>
             + add project
           </Link>
           <SyncButton />
@@ -108,15 +98,15 @@ export default async function Dashboard() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="projects" value={String(visible.length)} />
-        <StatTile label="deployed" value={String(deployed.length)} />
-        <StatTile label="views / 14d" value={fmtNum(totalViews)} accent />
-        <StatTile label={failing > 0 ? "failing deploys" : "visitors / 14d"} value={failing > 0 ? String(failing) : fmtNum(totalVisitors)} />
+        <StatTile size="lg" label="projects" value={String(visible.length)} />
+        <StatTile size="lg" label="deployed" value={String(deployed.length)} />
+        <StatTile size="lg" label="views / 14d" value={fmtNum(totalViews)} accent />
+        <StatTile size="lg" label={failing > 0 ? "failing deploys" : "visitors / 14d"} value={failing > 0 ? String(failing) : fmtNum(totalVisitors)} />
       </div>
 
       {deployed.length > 0 && (
         <section>
-          <h2 className="mb-3 text-[11px] uppercase tracking-wider text-dim">
+          <h2 className={sectionHeadCls}>
             Deployed <span className="text-mute">/ {deployed.length}</span>
           </h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -129,7 +119,7 @@ export default async function Dashboard() {
 
       {repoOnly.length > 0 && (
         <section>
-          <h2 className="mb-3 text-[11px] uppercase tracking-wider text-dim">
+          <h2 className={sectionHeadCls}>
             Repos <span className="text-mute">/ {repoOnly.length}</span>
           </h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

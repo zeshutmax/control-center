@@ -3,23 +3,13 @@
 import { eq, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, projects } from "@/db";
-import { fetchManifestFile, fetchRepo } from "@/lib/github";
-import { parseManifest } from "@/lib/manifest";
+import { fetchParsedManifest, fetchRepo } from "@/lib/github";
 import { runSync } from "@/lib/sync";
+import { slugify, uniqueMerge, uniqueSlug } from "@/lib/util";
 
 export type FormState = { message: string } | null;
 
 const REPO_RE = /^[\w.-]+\/[\w.-]+$/;
-
-function slugify(name: string): string {
-  return (
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 80) || "project"
-  );
-}
 
 /**
  * Add a project by hand — a GitHub repo, a live URL, or both. Manual projects
@@ -83,12 +73,9 @@ export async function addProject(_prev: FormState, formData: FormData): Promise<
           };
         }
       }
-      const raw = await fetchManifestFile(repoInfo.fullName);
-      if (raw !== null) {
-        const parsed = parseManifest(raw);
-        manifest = parsed.manifest;
-        manifestError = parsed.error;
-      }
+      const parsed = await fetchParsedManifest(repoInfo.fullName);
+      manifest = parsed?.manifest ?? null;
+      manifestError = parsed?.error ?? null;
     } catch {
       repoInfo = null; // GitHub unreachable — add the project bare, sync enriches later
     }
@@ -96,13 +83,10 @@ export async function addProject(_prev: FormState, formData: FormData): Promise<
 
   const name =
     nameInput || manifest?.name || repoInfo?.name || githubRepo.split("/")[1] || host;
-  const base = slugify(name);
   const taken = new Set(
     (await db.select({ slug: projects.slug }).from(projects)).map((p) => p.slug),
   );
-  taken.add("new"); // /projects/new is the add-project form route
-  let slug = base;
-  for (let i = 2; taken.has(slug); i++) slug = `${base}-${i}`;
+  const slug = uniqueSlug(slugify(name), taken);
 
   try {
     await db.insert(projects).values({
@@ -116,7 +100,7 @@ export async function addProject(_prev: FormState, formData: FormData): Promise<
       kind: "unknown",
       source: "manual",
       isManual: true,
-      topics: [...new Set([...(repoInfo?.topics ?? []), ...(manifest?.tags ?? [])])],
+      topics: uniqueMerge(repoInfo?.topics, manifest?.tags),
       manifest,
       manifestError,
       isArchived: repoInfo?.archived ?? false,

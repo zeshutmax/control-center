@@ -2,8 +2,14 @@ import { eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import { db, deployments, pageEvents, projects, syncRuns } from "@/db";
 import type { Project, ProjectManifest, SyncDetail } from "@/db/schema";
 import { listApps, listDeployments, type DoApp } from "./digitalocean";
-import { fetchManifestFile, fetchRepo, listRepos, type GithubRepo } from "./github";
-import { parseManifest } from "./manifest";
+import {
+  fetchParsedManifest,
+  fetchRepo,
+  listRepos,
+  type GithubRepo,
+  type ParsedManifest,
+} from "./github";
+import { slugify, uniqueMerge, uniqueSlug } from "./util";
 
 type ProjectRecord = {
   slug: string;
@@ -39,29 +45,17 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
   return results;
 }
 
-function slugify(name: string): string {
-  return (
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 80) || "project"
-  );
-}
-
 function buildRecords(
   repos: GithubRepo[],
   apps: DoApp[],
-  manifests: Map<string, { manifest: ProjectManifest | null; error: string | null }>,
+  manifests: Map<string, ParsedManifest>,
 ): { records: ProjectRecord[]; orphanApps: string[] } {
   const byRepo = new Map<string, ProjectRecord>();
   const extra: ProjectRecord[] = [];
-  // "new" is reserved: /projects/new is the add-project form route.
-  const usedSlugs = new Set<string>(["new"]);
+  const usedSlugs = new Set<string>();
 
   const claimSlug = (base: string): string => {
-    let slug = base;
-    for (let i = 2; usedSlugs.has(slug); i++) slug = `${base}-${i}`;
+    const slug = uniqueSlug(base, usedSlugs);
     usedSlugs.add(slug);
     return slug;
   };
@@ -79,7 +73,7 @@ function buildRecords(
       doAppId: null,
       kind: "unknown",
       source: "github",
-      topics: [...new Set([...repo.topics, ...(parsed?.manifest?.tags ?? [])])],
+      topics: uniqueMerge(repo.topics, parsed?.manifest?.tags),
       manifest: parsed?.manifest ?? null,
       manifestError: parsed?.error ?? null,
       isArchived: repo.archived,
@@ -238,8 +232,7 @@ async function upsertRecords(
         .where(eq(projects.id, match.id));
       if (r.doAppId) byAppId.set(r.doAppId, match);
     } else {
-      let slug = r.slug;
-      for (let i = 2; bySlug.has(slug) || slug === "new"; i++) slug = `${r.slug}-${i}`;
+      const slug = uniqueSlug(r.slug, new Set(bySlug.keys()));
       const [inserted] = await db
         .insert(projects)
         .values({ ...r, slug })
@@ -310,8 +303,7 @@ async function refreshManualRepos(liveRepoNames: Set<string>): Promise<void> {
     try {
       const repo = await fetchRepo(project.githubRepo!);
       if (!repo) return; // gone or inaccessible — keep what we have
-      const raw = await fetchManifestFile(repo.fullName);
-      const parsed = raw !== null ? parseManifest(raw) : null;
+      const parsed = await fetchParsedManifest(repo.fullName);
       await db
         .update(projects)
         .set({
@@ -319,7 +311,7 @@ async function refreshManualRepos(liveRepoNames: Set<string>): Promise<void> {
           description: project.description ?? parsed?.manifest?.description ?? repo.description,
           defaultBranch: repo.defaultBranch,
           homepage: repo.homepage ?? project.homepage,
-          topics: [...new Set([...repo.topics, ...(parsed?.manifest?.tags ?? [])])],
+          topics: uniqueMerge(repo.topics, parsed?.manifest?.tags),
           manifest: parsed?.manifest ?? null,
           manifestError: parsed?.error ?? null,
           isArchived: repo.archived,
@@ -363,13 +355,10 @@ export async function runSync(): Promise<SyncDetail> {
     const liveAppIds = new Set(apps.map((a) => a.id));
 
     const manifestCandidates = repos.filter((r) => !r.fork && !r.archived);
-    const manifests = new Map<string, { manifest: ProjectManifest | null; error: string | null }>();
+    const manifests = new Map<string, ParsedManifest>();
     await mapLimit(manifestCandidates, 8, async (repo) => {
-      const raw = await fetchManifestFile(repo.fullName);
-      if (raw !== null) {
-        const parsed = parseManifest(raw);
-        manifests.set(repo.fullName.toLowerCase(), parsed);
-      }
+      const parsed = await fetchParsedManifest(repo.fullName);
+      if (parsed !== null) manifests.set(repo.fullName.toLowerCase(), parsed);
     });
 
     const { records, orphanApps } = buildRecords(repos, apps, manifests);

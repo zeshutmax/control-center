@@ -2,10 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { addProject, type FormState } from "@/app/actions";
-
-const inputCls =
-  "w-full border border-line bg-bg px-3 py-2 text-[13px] text-ink placeholder:text-mute focus:border-accent focus:outline-none";
-const labelCls = "mb-1 block text-[11px] uppercase tracking-wider text-dim";
+import { buttonCls, inputCls, labelCls } from "./ui";
 
 export function AddProjectForm() {
   const [state, formAction, pending] = useActionState<FormState, FormData>(addProject, null);
@@ -54,7 +51,7 @@ export function AddProjectForm() {
         <button
           type="submit"
           disabled={pending}
-          className="bracket border border-line2 bg-panel2 px-5 py-2 text-[11px] uppercase tracking-wider text-ink hover:border-accent hover:text-accent disabled:opacity-50"
+          className={buttonCls}
         >
           {pending ? "adding…" : "add project"}
         </button>

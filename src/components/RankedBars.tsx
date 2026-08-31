@@ -1,12 +1,13 @@
 import type { RankedItem } from "@/lib/stats";
 import { fmtNum } from "@/lib/format";
+import { panelCls, sectionHeadCls } from "./ui";
 
 /** Ranked horizontal bars for top paths / referrers. Single hue; labels carry identity. */
 export function RankedBars({ title, items, empty }: { title: string; items: RankedItem[]; empty: string }) {
   const max = Math.max(...items.map((i) => i.views), 1);
   return (
-    <section className="bracket border border-line bg-panel p-4">
-      <h3 className="mb-3 text-[11px] uppercase tracking-wider text-dim">{title}</h3>
+    <section className={`${panelCls} p-4`}>
+      <h3 className={sectionHeadCls}>{title}</h3>
       {items.length === 0 ? (
         <p className="text-mute">{empty}</p>
       ) : (

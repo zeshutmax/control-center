@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { secureEquals } from "@/lib/util";
 
 /**
  * Dashboard auth. The registry contains private-repo names, manifests, and
@@ -16,13 +17,6 @@ import { NextResponse, type NextRequest } from "next/server";
  * Fail-closed policy: no credentials configured → open in dev, refused in
  * production.
  */
-
-function constantTimeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
 
 export default function proxy(req: NextRequest) {
   const token = process.env.CONTROL_CENTER_TOKEN;
@@ -47,14 +41,14 @@ export default function proxy(req: NextRequest) {
       const user = decoded.slice(0, sep);
       const password = decoded.slice(sep + 1);
       const ok = dashPass
-        ? constantTimeEqual(user, dashUser) && constantTimeEqual(password, dashPass)
-        : constantTimeEqual(password, token!);
+        ? secureEquals(user, dashUser) && secureEquals(password, dashPass)
+        : secureEquals(password, token!);
       if (ok) return NextResponse.next();
     } catch {
       // fall through to the challenge
     }
   }
-  if (token && header.startsWith("Bearer ") && constantTimeEqual(header.slice(7), token)) {
+  if (token && header.startsWith("Bearer ") && secureEquals(header.slice(7), token)) {
     return NextResponse.next();
   }
 

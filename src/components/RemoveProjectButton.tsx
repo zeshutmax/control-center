@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { removeProject } from "@/app/actions";
+import { dangerButtonCls } from "./ui";
 
 export function RemoveProjectButton({ slug }: { slug: string }) {
   const [pending, startTransition] = useTransition();
@@ -24,7 +25,7 @@ export function RemoveProjectButton({ slug }: { slug: string }) {
           });
         }}
         disabled={pending}
-        className="border border-line2 px-3 py-1 text-[10px] uppercase tracking-wider text-mute hover:border-alert hover:text-alert disabled:opacity-50"
+        className={dangerButtonCls}
       >
         {pending ? "removing…" : "remove"}
       </button>

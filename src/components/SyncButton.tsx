@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { syncNow } from "@/app/actions";
+import { buttonCls } from "./ui";
 
 export function SyncButton() {
   const router = useRouter();
@@ -26,7 +27,7 @@ export function SyncButton() {
       <button
         onClick={sync}
         disabled={pending}
-        className="bracket border border-line2 bg-panel2 px-4 py-1.5 text-[11px] uppercase tracking-wider text-ink hover:border-accent hover:text-accent disabled:opacity-50"
+        className={buttonCls}
       >
         {pending ? "syncing…" : "sync now"}
       </button>

@@ -5,24 +5,14 @@ import { notFound } from "next/navigation";
 import { CopyBlock } from "@/components/CopyBlock";
 import { RankedBars } from "@/components/RankedBars";
 import { RemoveProjectButton } from "@/components/RemoveProjectButton";
+import { StatTile } from "@/components/StatTile";
 import { TrafficChart } from "@/components/TrafficChart";
+import { panelCls, sectionHeadCls } from "@/components/ui";
 import { db, deployments, projects } from "@/db";
 import { fmtNum, phaseLed, relTime } from "@/lib/format";
 import { statsForProject } from "@/lib/stats";
 
 export const dynamic = "force-dynamic";
-
-function Tile({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
-  return (
-    <div className="bracket border border-line bg-panel px-4 py-3">
-      <div className="font-display text-2xl font-semibold text-ink">{value}</div>
-      <div className="mt-0.5 text-[11px] uppercase tracking-wider text-mute">
-        {label}
-        {sub ? <span className="ml-1 normal-case">· {sub}</span> : null}
-      </div>
-    </div>
-  );
-}
 
 export default async function ProjectPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -79,9 +69,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Tile label="views" sub="30d" value={fmtNum(stats.totals.views)} />
-        <Tile label="visitors" sub="30d" value={fmtNum(stats.totals.visitors)} />
-        <Tile
+        <StatTile label="views" sub="30d" value={fmtNum(stats.totals.views)} />
+        <StatTile label="visitors" sub="30d" value={fmtNum(stats.totals.visitors)} />
+        <StatTile
           label="deploy"
           value={
             <span className="flex items-center gap-2">
@@ -91,11 +81,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
           }
           sub={relTime(project.lastDeployAt)}
         />
-        <Tile label="last commit" value={<span className="text-lg">{relTime(project.lastCommitAt)}</span>} />
+        <StatTile label="last commit" value={<span className="text-lg">{relTime(project.lastCommitAt)}</span>} />
       </div>
 
-      <section className="bracket border border-line bg-panel p-4">
-        <h2 className="mb-3 text-[11px] uppercase tracking-wider text-dim">Traffic / 30d</h2>
+      <section className={`${panelCls} p-4`}>
+        <h2 className={sectionHeadCls}>Traffic / 30d</h2>
         <TrafficChart daily={stats.daily} />
       </section>
 
@@ -105,8 +95,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
-        <section className="bracket border border-line bg-panel p-4">
-          <h2 className="mb-3 text-[11px] uppercase tracking-wider text-dim">Deployments</h2>
+        <section className={`${panelCls} p-4`}>
+          <h2 className={sectionHeadCls}>Deployments</h2>
           {deploys.length === 0 ? (
             <p className="text-mute">no deployments recorded{project.doAppId ? " — run a sync" : ""}</p>
           ) : (
@@ -126,8 +116,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
           )}
         </section>
 
-        <section className="bracket border border-line bg-panel p-4">
-          <h2 className="mb-3 text-[11px] uppercase tracking-wider text-dim">Manifest</h2>
+        <section className={`${panelCls} p-4`}>
+          <h2 className={sectionHeadCls}>Manifest</h2>
           {project.manifest ? (
             <div className="space-y-3">
               {(project.manifest.stack?.length ?? 0) > 0 && (
@@ -173,8 +163,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
         </section>
       </div>
 
-      <section className="bracket border border-line bg-panel p-4">
-        <h2 className="mb-3 text-[11px] uppercase tracking-wider text-dim">Analytics pixel</h2>
+      <section className={`${panelCls} p-4`}>
+        <h2 className={sectionHeadCls}>Analytics pixel</h2>
         <CopyBlock text={`<script defer src="${origin}/px.js" data-site="${project.slug}"></script>`} />
         <p className="mt-2 text-[11px] text-mute">
           Place in the site&apos;s &lt;head&gt;. Localhost traffic is ignored unless <code>data-dev</code> is set.

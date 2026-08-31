@@ -1,3 +1,6 @@
+import { parseManifest } from "./manifest";
+import type { ProjectManifest } from "@/db/schema";
+
 const API = "https://api.github.com";
 
 export type GithubRepo = {
@@ -112,4 +115,12 @@ export async function fetchManifestFile(fullName: string): Promise<string | null
     }
   }
   return null;
+}
+
+export type ParsedManifest = { manifest: ProjectManifest | null; error: string | null };
+
+/** Fetch and parse a repo's project.yaml in one step; null when there is none. */
+export async function fetchParsedManifest(fullName: string): Promise<ParsedManifest | null> {
+  const raw = await fetchManifestFile(fullName);
+  return raw === null ? null : parseManifest(raw);
 }

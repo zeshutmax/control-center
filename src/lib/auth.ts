@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { secureEquals } from "./util";
 
 /**
  * Bearer-token guard for /api/mcp and /api/sync.
@@ -22,9 +22,7 @@ export function checkAuth(req: Request): Response | null {
 
   const header = req.headers.get("authorization") ?? "";
   const provided = header.startsWith("Bearer ") ? header.slice(7) : "";
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+  if (!secureEquals(provided, expected)) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
   return null;

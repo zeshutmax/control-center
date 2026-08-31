@@ -61,6 +61,24 @@ async function readBodyCapped(req: Request): Promise<string | null> {
   return new TextDecoder().decode(merged);
 }
 
+// Slug → project id, cached briefly so busy pixels don't hit the DB twice per
+// event. Misses are cached too (null), so unknown sites stay cheap.
+const SLUG_CACHE_TTL = 30_000;
+const slugCache = new Map<string, { id: number | null; expiresAt: number }>();
+
+async function projectIdForSite(siteId: string): Promise<number | null> {
+  const cached = slugCache.get(siteId);
+  if (cached && cached.expiresAt > Date.now()) return cached.id;
+  const [project] = await db
+    .select({ id: projects.id })
+    .from(projects)
+    .where(eq(projects.slug, siteId))
+    .limit(1);
+  if (slugCache.size > 10_000) slugCache.clear();
+  slugCache.set(siteId, { id: project?.id ?? null, expiresAt: Date.now() + SLUG_CACHE_TTL });
+  return project?.id ?? null;
+}
+
 function dailyVisitorHash(ip: string, ua: string): string {
   const secret = process.env.PIXEL_SECRET || "dev-pixel-secret";
   const day = new Date().toISOString().slice(0, 10);
@@ -123,14 +141,8 @@ export async function POST(req: Request) {
   }
   const path = sanitize(rawPath.split(/[?#]/)[0], 512);
 
-  const [project] = await db
-    .select({ id: projects.id })
-    .from(projects)
-    .where(eq(projects.slug, siteId))
-    .limit(1);
-
   await db.insert(pageEvents).values({
-    projectId: project?.id ?? null,
+    projectId: await projectIdForSite(siteId),
     siteId,
     host,
     path,
