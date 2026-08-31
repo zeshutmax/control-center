@@ -198,8 +198,8 @@ async function upsertRecords(
           ? {
               doAppId: r.doAppId,
               kind: r.kind,
-              // A manual row's hand-entered URL beats the app's default domain.
-              liveUrl: match.isManual ? (match.liveUrl ?? r.liveUrl) : r.liveUrl,
+              // Owner-entered URLs live in custom_live_url, so this can't clobber them.
+              liveUrl: r.liveUrl,
               lastDeployAt: r.lastDeployAt,
               deployPhase: r.deployPhase,
               // Repo listed in the app spec but absent from GitHub → repo was
@@ -307,8 +307,8 @@ async function refreshManualRepos(liveRepoNames: Set<string>): Promise<void> {
       await db
         .update(projects)
         .set({
-          // Hand-entered description wins over GitHub's — refresh only fills gaps.
-          description: project.description ?? parsed?.manifest?.description ?? repo.description,
+          // Base fields are sync-owned; owner text lives in the custom_* overrides.
+          description: parsed?.manifest?.description ?? repo.description,
           defaultBranch: repo.defaultBranch,
           homepage: repo.homepage ?? project.homepage,
           topics: uniqueMerge(repo.topics, parsed?.manifest?.tags),

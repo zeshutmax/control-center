@@ -1,3 +1,21 @@
+import type { Project } from "@/db/schema";
+
+/**
+ * Effective display fields: owner overrides win, then synced values, then the
+ * repo homepage for the live link. Use this everywhere a project is shown.
+ */
+export function displayFields(p: Project): {
+  name: string;
+  description: string | null;
+  liveUrl: string | null;
+} {
+  return {
+    name: p.customName ?? p.name,
+    description: p.customDescription ?? p.description,
+    liveUrl: p.customLiveUrl ?? p.liveUrl ?? p.homepage,
+  };
+}
+
 /** URL-safe slug from a project or repo name. */
 export function slugify(name: string): string {
   return (

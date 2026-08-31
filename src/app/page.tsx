@@ -9,6 +9,7 @@ import { buttonCls, sectionHeadCls } from "@/components/ui";
 import { fmtNum, phaseLed, relTime } from "@/lib/format";
 import { statsSummary, type ProjectSummary } from "@/lib/stats";
 import { lastSyncRun } from "@/lib/sync";
+import { displayFields } from "@/lib/util";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ function SourceBadge({ project }: { project: Project }) {
 function ProjectCard({ project, summary }: { project: Project; summary?: ProjectSummary }) {
   const led = phaseLed(project.deployPhase);
   const views = summary?.totals.views ?? 0;
+  const display = displayFields(project);
   return (
     <Link
       href={`/projects/${project.slug}`}
@@ -33,7 +35,7 @@ function ProjectCard({ project, summary }: { project: Project; summary?: Project
       <div className="flex items-center gap-2.5">
         <span className={`led ${led.cls}`} title={led.label} />
         <span className="font-display truncate text-lg font-semibold uppercase tracking-wide text-ink group-hover:text-accent">
-          {project.name}
+          {display.name}
         </span>
         <span className="ml-auto flex items-center gap-1.5">
           {project.manifest && (
@@ -44,7 +46,7 @@ function ProjectCard({ project, summary }: { project: Project; summary?: Project
           <SourceBadge project={project} />
         </span>
       </div>
-      <p className="line-clamp-2 min-h-[2.6em] text-dim">{project.description ?? "no description"}</p>
+      <p className="line-clamp-2 min-h-[2.6em] text-dim">{display.description ?? "no description"}</p>
       <div className="flex items-end justify-between gap-3">
         <div className="space-y-0.5 text-[11px] text-mute">
           <div>commit {relTime(project.lastCommitAt)}</div>
@@ -75,7 +77,9 @@ export default async function Dashboard() {
   );
   const hidden = allProjects.length - visible.length - removed.length;
   // "Deployed" = live somewhere: a DO app, or a manual project with a URL.
-  const deployed = visible.filter((p) => p.doAppId !== null || (p.isManual && p.liveUrl));
+  const deployed = visible.filter(
+    (p) => p.doAppId !== null || (p.isManual && displayFields(p).liveUrl),
+  );
   const repoOnly = visible.filter((p) => !deployed.includes(p));
   // Totals over visible projects only, so the tiles match the cards below.
   const visibleSummaries = visible.map((p) => summary.get(p.id)).filter((s) => s !== undefined);

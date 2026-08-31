@@ -8,9 +8,27 @@ import { fetchParsedManifest, fetchRepo } from "@/lib/github";
 import { runSync } from "@/lib/sync";
 import { slugify, uniqueMerge, uniqueSlug } from "@/lib/util";
 
-export type FormState = { message: string } | null;
+export type FormState = { ok?: boolean; message: string } | null;
 
 const REPO_RE = /^[\w.-]+\/[\w.-]+$/;
+
+/** "" → null; anything else trimmed. */
+function nullable(v: FormDataEntryValue | null): string | null {
+  const s = String(v ?? "").trim();
+  return s || null;
+}
+
+/** Normalize a user-typed URL; null when empty, undefined when invalid. */
+function normalizeUrl(raw: string | null): string | null | undefined {
+  if (!raw) return null;
+  try {
+    const u = new URL(raw.includes("://") ? raw : `https://${raw}`);
+    if (!/^https?:$/.test(u.protocol)) return undefined;
+    return u.href.replace(/\/$/, "");
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Add a project by hand — a GitHub repo, a live URL, or both. Manual projects
@@ -19,26 +37,21 @@ const REPO_RE = /^[\w.-]+\/[\w.-]+$/;
  */
 export async function addProject(_prev: FormState, formData: FormData): Promise<FormState> {
   const githubRepo = String(formData.get("githubRepo") ?? "").trim().replace(/^https:\/\/github\.com\//, "").replace(/\/$/, "");
-  const liveUrl = String(formData.get("liveUrl") ?? "").trim();
-  const nameInput = String(formData.get("name") ?? "").trim();
-  const description = String(formData.get("description") ?? "").trim();
+  const rawLiveUrl = nullable(formData.get("liveUrl"));
+  const nameInput = nullable(formData.get("name"));
+  const description = nullable(formData.get("description"));
 
-  if (!githubRepo && !liveUrl) {
+  if (!githubRepo && !rawLiveUrl) {
     return { message: "Give the project a GitHub repo, a URL, or both." };
   }
   if (githubRepo && !REPO_RE.test(githubRepo)) {
     return { message: `"${githubRepo}" doesn't look like owner/repo.` };
   }
-  let host = "";
-  if (liveUrl) {
-    try {
-      const u = new URL(liveUrl.includes("://") ? liveUrl : `https://${liveUrl}`);
-      if (!/^https?:$/.test(u.protocol)) throw new Error();
-      host = u.hostname;
-    } catch {
-      return { message: `"${liveUrl}" isn't a valid URL.` };
-    }
+  const liveUrl = normalizeUrl(rawLiveUrl);
+  if (liveUrl === undefined) {
+    return { message: `"${rawLiveUrl}" isn't a valid URL.` };
   }
+  const host = liveUrl ? new URL(liveUrl).hostname : "";
 
   if (githubRepo) {
     const [dup] = await db
@@ -82,8 +95,10 @@ export async function addProject(_prev: FormState, formData: FormData): Promise<
     }
   }
 
+  // Typed values go into custom* overrides so no future sync (or graduation to
+  // a synced project) can clobber them; base fields hold GitHub-derived data.
   const name =
-    nameInput || manifest?.name || repoInfo?.name || githubRepo.split("/")[1] || host;
+    nameInput ?? manifest?.name ?? repoInfo?.name ?? githubRepo.split("/")[1] ?? host;
   const taken = new Set(
     (await db.select({ slug: projects.slug }).from(projects)).map((p) => p.slug),
   );
@@ -92,12 +107,15 @@ export async function addProject(_prev: FormState, formData: FormData): Promise<
   try {
     await db.insert(projects).values({
       slug,
-      name,
-      description: description || manifest?.description || repoInfo?.description || null,
+      name: manifest?.name ?? repoInfo?.name ?? githubRepo.split("/")[1] ?? host,
+      customName: nameInput,
+      description: manifest?.description ?? repoInfo?.description ?? null,
+      customDescription: description,
       githubRepo: repoInfo?.fullName ?? (githubRepo || null),
       defaultBranch: repoInfo?.defaultBranch ?? null,
       homepage: repoInfo?.homepage ?? null,
-      liveUrl: liveUrl ? (liveUrl.includes("://") ? liveUrl : `https://${liveUrl}`) : manifest?.url ?? null,
+      liveUrl: manifest?.url ?? null,
+      customLiveUrl: liveUrl,
       kind: "unknown",
       source: "manual",
       isManual: true,
@@ -134,6 +152,38 @@ export async function removeProject(slug: string): Promise<FormState> {
   }
   revalidatePath("/");
   redirect("/");
+}
+
+/**
+ * Save owner edits as overrides. Empty fields clear the override, falling back
+ * to whatever the sync reports. The slug (= pixel site id) never changes.
+ */
+export async function updateProject(
+  slug: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const [project] = await db.select().from(projects).where(eq(projects.slug, slug)).limit(1);
+  if (!project) return { message: "Project not found." };
+
+  const customLiveUrl = normalizeUrl(nullable(formData.get("liveUrl")));
+  if (customLiveUrl === undefined) {
+    return { message: "That live URL doesn't look valid." };
+  }
+
+  await db
+    .update(projects)
+    .set({
+      customName: nullable(formData.get("name")),
+      customDescription: nullable(formData.get("description")),
+      customLiveUrl,
+      updatedAt: new Date(),
+    })
+    .where(eq(projects.id, project.id));
+
+  revalidatePath("/");
+  revalidatePath(`/projects/${slug}`);
+  return { ok: true, message: "Saved." };
 }
 
 /** Bring a hidden project back onto the dashboard and into MCP results. */

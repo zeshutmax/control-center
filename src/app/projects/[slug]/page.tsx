@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CopyBlock } from "@/components/CopyBlock";
+import { EditProjectForm } from "@/components/EditProjectForm";
 import { RankedBars } from "@/components/RankedBars";
 import { RemoveProjectButton } from "@/components/RemoveProjectButton";
 import { StatTile } from "@/components/StatTile";
@@ -11,6 +12,7 @@ import { panelCls, sectionHeadCls } from "@/components/ui";
 import { db, deployments, projects } from "@/db";
 import { fmtNum, phaseLed, relTime } from "@/lib/format";
 import { statsForProject } from "@/lib/stats";
+import { displayFields } from "@/lib/util";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +36,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
   const host = headerList.get("x-forwarded-host") ?? headerList.get("host") ?? "localhost:3000";
   const proto = headerList.get("x-forwarded-proto") ?? "http";
   const origin = process.env.CONTROL_CENTER_URL || `${proto}://${host}`;
-  const liveUrl = project.liveUrl ?? project.homepage;
+  const display = displayFields(project);
+  const liveUrl = display.liveUrl;
 
   return (
     <div className="space-y-6">
@@ -44,7 +47,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
         </Link>
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
           <span className={`led ${led.cls}`} title={led.label} />
-          <h1 className="font-display text-4xl font-bold uppercase tracking-wide text-ink">{project.name}</h1>
+          <h1 className="font-display text-4xl font-bold uppercase tracking-wide text-ink">{display.name}</h1>
           <span className="text-mute">{project.slug}</span>
           <span className="ml-auto flex gap-4 text-[11px] uppercase tracking-wider">
             {liveUrl && (
@@ -70,7 +73,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
             hidden from the registry — restore it from the dashboard
           </p>
         )}
-        {project.description && <p className="mt-2 max-w-2xl text-dim">{project.description}</p>}
+        {display.description && <p className="mt-2 max-w-2xl text-dim">{display.description}</p>}
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -174,6 +177,23 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
         <p className="mt-2 text-[11px] text-mute">
           Place in the site&apos;s &lt;head&gt;. Localhost traffic is ignored unless <code>data-dev</code> is set.
         </p>
+      </section>
+
+      <section className={`${panelCls} p-4`}>
+        <h2 className={sectionHeadCls}>Edit project</h2>
+        <EditProjectForm
+          slug={project.slug}
+          defaults={{
+            name: project.customName ?? "",
+            description: project.customDescription ?? "",
+            liveUrl: project.customLiveUrl ?? "",
+          }}
+          synced={{
+            name: project.name,
+            description: project.description ?? "",
+            liveUrl: project.liveUrl ?? project.homepage ?? "",
+          }}
+        />
       </section>
     </div>
   );

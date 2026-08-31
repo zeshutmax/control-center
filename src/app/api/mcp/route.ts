@@ -5,6 +5,7 @@ import { db, deployments, projects } from "@/db";
 import { checkAuth } from "@/lib/auth";
 import { statsForProject } from "@/lib/stats";
 import { lastSyncRun } from "@/lib/sync";
+import { displayFields } from "@/lib/util";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -14,14 +15,15 @@ function json(data: unknown) {
 }
 
 function projectSummary(p: typeof projects.$inferSelect) {
+  const display = displayFields(p);
   return {
     slug: p.slug,
-    name: p.name,
-    description: p.description,
+    name: display.name,
+    description: display.description,
     kind: p.kind,
     source: p.source,
     githubRepo: p.githubRepo,
-    liveUrl: p.liveUrl ?? p.homepage,
+    liveUrl: display.liveUrl,
     deployPhase: p.deployPhase,
     lastCommitAt: p.lastCommitAt,
     lastDeployAt: p.lastDeployAt,
@@ -194,12 +196,10 @@ const handler = createMcpHandler(
           note: "exposes/needs come from each repo's project.yaml. Projects without a manifest only have repo metadata — suggest adding project.yaml where reasoning is limited.",
           projects: active.map((p) => ({
             slug: p.slug,
-            name: p.name,
-            description: p.description,
-            liveUrl: p.liveUrl ?? p.homepage,
+            ...displayFields(p),
             // Same definition as the dashboard: a DO app, or a manual project
             // that points at a live site.
-            deployed: p.doAppId !== null || (p.isManual && p.liveUrl !== null),
+            deployed: p.doAppId !== null || (p.isManual && displayFields(p).liveUrl !== null),
             stack: p.manifest?.stack ?? [],
             tags: p.topics,
             exposes: p.manifest?.exposes ?? [],

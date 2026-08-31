@@ -38,6 +38,11 @@ export const projects = pgTable(
     // "Removed" by the owner: hidden from the dashboard and MCP, still synced
     // in the background (deleting a synced row would just come back), restorable.
     isHidden: boolean("is_hidden").notNull().default(false),
+    // Owner-edited overrides. The sync owns the base columns and rewrites them
+    // freely; these always win at display time and null means "use synced".
+    customName: text("custom_name"),
+    customDescription: text("custom_description"),
+    customLiveUrl: text("custom_live_url"),
     topics: jsonb("topics").$type<string[]>().notNull().default([]),
     // Parsed project.yaml from the repo root, if present
     manifest: jsonb("manifest").$type<ProjectManifest | null>(),
