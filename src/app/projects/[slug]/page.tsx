@@ -62,9 +62,14 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
                 github ↗
               </a>
             )}
-            {project.isManual && <RemoveProjectButton slug={project.slug} />}
+            <RemoveProjectButton slug={project.slug} isManual={project.isManual} />
           </span>
         </div>
+        {project.isHidden && (
+          <p className="mt-2 text-[11px] uppercase tracking-wider text-amber">
+            hidden from the registry — restore it from the dashboard
+          </p>
+        )}
         {project.description && <p className="mt-2 max-w-2xl text-dim">{project.description}</p>}
       </div>
 

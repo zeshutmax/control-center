@@ -1,5 +1,6 @@
 import { desc } from "drizzle-orm";
 import Link from "next/link";
+import { restoreProject } from "@/app/actions";
 import { db, projects, type Project } from "@/db";
 import { Sparkline } from "@/components/Sparkline";
 import { StatTile } from "@/components/StatTile";
@@ -66,9 +67,13 @@ export default async function Dashboard() {
   ]);
 
   // Manual projects are always shown — the owner added them on purpose,
-  // even when the linked repo is a fork or archived.
-  const visible = allProjects.filter((p) => p.isManual || (!p.isArchived && !p.isFork));
-  const hidden = allProjects.length - visible.length;
+  // even when the linked repo is a fork or archived. Hidden (removed) projects
+  // are excluded everywhere and restorable from the section at the bottom.
+  const removed = allProjects.filter((p) => p.isHidden);
+  const visible = allProjects.filter(
+    (p) => !p.isHidden && (p.isManual || (!p.isArchived && !p.isFork)),
+  );
+  const hidden = allProjects.length - visible.length - removed.length;
   // "Deployed" = live somewhere: a DO app, or a manual project with a URL.
   const deployed = visible.filter((p) => p.doAppId !== null || (p.isManual && p.liveUrl));
   const repoOnly = visible.filter((p) => !deployed.includes(p));
@@ -138,6 +143,27 @@ export default async function Dashboard() {
       )}
 
       {hidden > 0 && <p className="text-[11px] text-mute">{hidden} archived/forked repos hidden</p>}
+
+      {removed.length > 0 && (
+        <details className="text-[11px] text-mute">
+          <summary className="cursor-pointer uppercase tracking-wider hover:text-dim">
+            Removed projects / {removed.length}
+          </summary>
+          <ul className="mt-3 space-y-2">
+            {removed.map((p) => (
+              <li key={p.id} className="flex items-center gap-3">
+                <span className="text-dim">{p.name}</span>
+                <span>{p.slug}</span>
+                <form action={restoreProject.bind(null, p.slug)}>
+                  <button className="border border-line2 px-2 py-0.5 text-[10px] uppercase tracking-wider text-dim hover:border-accent hover:text-accent">
+                    restore
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
   );
 }

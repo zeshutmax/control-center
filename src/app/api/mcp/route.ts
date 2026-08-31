@@ -28,6 +28,7 @@ function projectSummary(p: typeof projects.$inferSelect) {
     topics: p.topics,
     hasManifest: p.manifest !== null,
     isManual: p.isManual,
+    isHidden: p.isHidden,
     isArchived: p.isArchived,
     isFork: p.isFork,
   };
@@ -57,11 +58,16 @@ const handler = createMcpHandler(
         inputSchema: z.object({
           source: z.enum(["github", "do", "both", "manual"]).optional().describe("Filter by source"),
           includeArchived: z.boolean().default(false).describe("Include archived repos and forks"),
+          includeHidden: z
+            .boolean()
+            .default(false)
+            .describe("Include projects the owner removed (hid) from the registry"),
         }),
       },
-      async ({ source, includeArchived }) => {
+      async ({ source, includeArchived, includeHidden }) => {
         let rows = await db.select().from(projects).orderBy(desc(projects.lastCommitAt));
         if (source) rows = rows.filter((p) => p.source === source);
+        if (!includeHidden) rows = rows.filter((p) => !p.isHidden);
         if (!includeArchived) rows = rows.filter((p) => p.isManual || (!p.isArchived && !p.isFork));
         return json({ count: rows.length, projects: rows.map(projectSummary) });
       },
@@ -181,7 +187,9 @@ const handler = createMcpHandler(
       },
       async () => {
         const rows = await db.select().from(projects);
-        const active = rows.filter((p) => p.isManual || (!p.isArchived && !p.isFork));
+        const active = rows.filter(
+          (p) => !p.isHidden && (p.isManual || (!p.isArchived && !p.isFork)),
+        );
         return json({
           note: "exposes/needs come from each repo's project.yaml. Projects without a manifest only have repo metadata — suggest adding project.yaml where reasoning is limited.",
           projects: active.map((p) => ({

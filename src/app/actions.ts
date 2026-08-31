@@ -1,6 +1,7 @@
 "use server";
 
 import { eq, sql } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db, projects } from "@/db";
 import { fetchParsedManifest, fetchRepo } from "@/lib/github";
@@ -115,15 +116,33 @@ export async function addProject(_prev: FormState, formData: FormData): Promise<
   redirect(`/projects/${slug}`);
 }
 
-/** Remove a manually added project. Synced projects are managed by the sync. */
+/**
+ * Remove a project. Manual projects are deleted outright; synced projects are
+ * hidden instead — the autoscan would re-discover a deleted one on the next
+ * run, so hiding (restorable from the dashboard) is the honest removal.
+ */
 export async function removeProject(slug: string): Promise<FormState> {
   const [project] = await db.select().from(projects).where(eq(projects.slug, slug)).limit(1);
   if (!project) return { message: "Project not found." };
-  if (!project.isManual) {
-    return { message: "Only manually added projects can be removed here — synced ones come back on the next sync." };
+  if (project.isManual) {
+    await db.delete(projects).where(eq(projects.id, project.id));
+  } else {
+    await db
+      .update(projects)
+      .set({ isHidden: true, updatedAt: new Date() })
+      .where(eq(projects.id, project.id));
   }
-  await db.delete(projects).where(eq(projects.id, project.id));
+  revalidatePath("/");
   redirect("/");
+}
+
+/** Bring a hidden project back onto the dashboard and into MCP results. */
+export async function restoreProject(slug: string): Promise<void> {
+  await db
+    .update(projects)
+    .set({ isHidden: false, updatedAt: new Date() })
+    .where(eq(projects.slug, slug));
+  revalidatePath("/");
 }
 
 /**

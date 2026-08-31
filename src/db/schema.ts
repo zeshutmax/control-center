@@ -35,6 +35,9 @@ export const projects = pgTable(
     source: text("source").notNull().default("github"),
     // Added by hand via the dashboard: sync may enrich it but never deletes it.
     isManual: boolean("is_manual").notNull().default(false),
+    // "Removed" by the owner: hidden from the dashboard and MCP, still synced
+    // in the background (deleting a synced row would just come back), restorable.
+    isHidden: boolean("is_hidden").notNull().default(false),
     topics: jsonb("topics").$type<string[]>().notNull().default([]),
     // Parsed project.yaml from the repo root, if present
     manifest: jsonb("manifest").$type<ProjectManifest | null>(),
