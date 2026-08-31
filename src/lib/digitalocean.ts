@@ -22,7 +22,11 @@ export type DoDeployment = {
   createdAt: string;
 };
 
-type SpecComponent = { github?: { repo?: string } };
+type SpecComponent = {
+  github?: { repo?: string };
+  gitlab?: { repo?: string };
+  git?: { repo_clone_url?: string };
+};
 
 type AppResponse = {
   id: string;
@@ -58,6 +62,11 @@ function extractGithubRepo(spec: AppResponse["spec"]): string | null {
   ];
   for (const c of components) {
     if (c.github?.repo) return c.github.repo;
+    // Apps deployed from a plain git URL (no GitHub integration) still name
+    // their repo in repo_clone_url — parse it so they match their repo rows.
+    const cloneUrl = c.git?.repo_clone_url;
+    const m = cloneUrl?.match(/github\.com[/:]([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/i);
+    if (m) return m[1];
   }
   return null;
 }
