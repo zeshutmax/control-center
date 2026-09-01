@@ -32,7 +32,12 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
     headers(),
   ]);
 
-  const led = phaseLed(project.deployPhase);
+  // A DO app carries a real deployment phase; anything else with a URL is
+  // deployed elsewhere ("external"); otherwise it's genuinely not deployed.
+  const led =
+    project.doAppId === null && displayFields(project).liveUrl
+      ? { cls: "led-active", label: "external" }
+      : phaseLed(project.deployPhase);
   const host = headerList.get("x-forwarded-host") ?? headerList.get("host") ?? "localhost:3000";
   const proto = headerList.get("x-forwarded-proto") ?? "http";
   const origin = process.env.CONTROL_CENTER_URL || `${proto}://${host}`;

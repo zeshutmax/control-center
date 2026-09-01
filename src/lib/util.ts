@@ -16,6 +16,14 @@ export function displayFields(p: Project): {
   };
 }
 
+/**
+ * A project counts as deployed when it's a DigitalOcean app or has any known
+ * URL — a site living on Vercel or elsewhere is deployed too, just not here.
+ */
+export function isDeployed(p: Project): boolean {
+  return p.doAppId !== null || displayFields(p).liveUrl !== null;
+}
+
 /** URL-safe slug from a project or repo name. */
 export function slugify(name: string): string {
   return (

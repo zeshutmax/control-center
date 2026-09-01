@@ -5,7 +5,7 @@ import { db, deployments, projects } from "@/db";
 import { checkAuth } from "@/lib/auth";
 import { statsForProject } from "@/lib/stats";
 import { lastSyncRun } from "@/lib/sync";
-import { displayFields } from "@/lib/util";
+import { displayFields, isDeployed } from "@/lib/util";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -197,9 +197,9 @@ const handler = createMcpHandler(
           projects: active.map((p) => ({
             slug: p.slug,
             ...displayFields(p),
-            // Same definition as the dashboard: a DO app, or a manual project
-            // that points at a live site.
-            deployed: p.doAppId !== null || (p.isManual && displayFields(p).liveUrl !== null),
+            // Same definition as the dashboard: a URL means it's deployed,
+            // whether on DigitalOcean or anywhere else.
+            deployed: isDeployed(p),
             stack: p.manifest?.stack ?? [],
             tags: p.topics,
             exposes: p.manifest?.exposes ?? [],

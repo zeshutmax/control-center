@@ -9,7 +9,7 @@ import { buttonCls, sectionHeadCls } from "@/components/ui";
 import { fmtNum, phaseLed, relTime } from "@/lib/format";
 import { statsSummary, type ProjectSummary } from "@/lib/stats";
 import { lastSyncRun } from "@/lib/sync";
-import { displayFields } from "@/lib/util";
+import { displayFields, isDeployed } from "@/lib/util";
 
 export const dynamic = "force-dynamic";
 
@@ -18,15 +18,21 @@ function SourceBadge({ project }: { project: Project }) {
     return <span className="border border-accent/40 px-1.5 py-px text-[10px] uppercase text-accent">manual</span>;
   if (project.source === "do")
     return <span className="border border-amber/40 px-1.5 py-px text-[10px] uppercase text-amber">no repo</span>;
+  // Deployed elsewhere (a URL, but no DO app) is still deployed.
+  if (project.doAppId === null && displayFields(project).liveUrl)
+    return <span className="border border-line2 px-1.5 py-px text-[10px] uppercase text-dim">external</span>;
   if (project.source === "github")
     return <span className="border border-line2 px-1.5 py-px text-[10px] uppercase text-mute">not deployed</span>;
   return null;
 }
 
 function ProjectCard({ project, summary }: { project: Project; summary?: ProjectSummary }) {
-  const led = phaseLed(project.deployPhase);
-  const views = summary?.totals.views ?? 0;
   const display = displayFields(project);
+  const led =
+    project.doAppId === null && display.liveUrl
+      ? { cls: "led-active", label: "external" }
+      : phaseLed(project.deployPhase);
+  const views = summary?.totals.views ?? 0;
   return (
     <Link
       href={`/projects/${project.slug}`}
@@ -76,10 +82,8 @@ export default async function Dashboard() {
     (p) => !p.isHidden && (p.isManual || (!p.isArchived && !p.isFork)),
   );
   const hidden = allProjects.length - visible.length - removed.length;
-  // "Deployed" = live somewhere: a DO app, or a manual project with a URL.
-  const deployed = visible.filter(
-    (p) => p.doAppId !== null || (p.isManual && displayFields(p).liveUrl),
-  );
+  // "Deployed" = live somewhere: a DO app, or any project with a known URL.
+  const deployed = visible.filter(isDeployed);
   const repoOnly = visible.filter((p) => !deployed.includes(p));
   // Totals over visible projects only, so the tiles match the cards below.
   const visibleSummaries = visible.map((p) => summary.get(p.id)).filter((s) => s !== undefined);
