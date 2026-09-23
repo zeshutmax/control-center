@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Pre-push gate — the same file in every project.
+#
+# This replaces the GitHub Actions workflow that used to run on push. It runs
+# EARLIER than CI did: a red gate stops the push instead of reporting on it
+# afterwards, which matters because App Platform deploys on push, so a broken
+# build used to reach production and simply keep serving the old version while
+# nobody was told.
+#
+# `npm run verify` is the one entrypoint every repo here now exposes.
+#
+# Escape hatch: `git push --no-verify` skips this. That is deliberate — it is
+# your machine — but it is also the honest difference from CI: this gate is
+# skippable and runs on whatever Node you happen to have, so it is a fast
+# feedback loop, not a guarantee nobody can bypass.
+set -uo pipefail
+
+# Nothing to check when the push deletes a ref.
+if [ -t 0 ]; then has_input=0; else has_input=1; fi
+if [ "$has_input" = 1 ]; then
+  only_deletes=1
+  while read -r _local_ref local_sha _remote_ref _remote_sha; do
+    [ -z "${local_sha:-}" ] && continue
+    [ "$local_sha" = "0000000000000000000000000000000000000000" ] || only_deletes=0
+  done
+  [ "$only_deletes" = 1 ] && exit 0
+fi
+
+cd "$(git rev-parse --show-toplevel)"
+
+if ! grep -q '"verify"' package.json 2>/dev/null; then
+  echo "pre-push: no \"verify\" script in package.json; nothing to check." >&2
+  exit 0
+fi
+
+RUNNER=npm
+[ -f pnpm-lock.yaml ] && RUNNER=pnpm
+
+echo "pre-push: $RUNNER run verify   (skip with --no-verify)"
+if ! $RUNNER run verify; then
+  echo >&2
+  echo "pre-push: verify FAILED — push aborted." >&2
+  echo "          Fix it, or push anyway with: git push --no-verify" >&2
+  exit 1
+fi
